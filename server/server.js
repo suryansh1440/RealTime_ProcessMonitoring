@@ -121,7 +121,7 @@ async function getSystemMetrics() {
         name: proc.name,
         cpu: proc.cpu.toFixed(1),
         memory: Math.round(proc.memRss / (1024 * 1024)), // Convert to MB
-        status: proc.state
+        status: proc.state || 'unknown' // Ensure we have a fallback value
       }));
 
     return {

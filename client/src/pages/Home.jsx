@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { FaMicrochip, FaMemory, FaServer, FaExclamationTriangle, FaShieldAlt, FaChartBar, FaClock, FaMicrochip as FaCpu, FaDatabase, FaNetworkWired, FaBell, FaTimes } from 'react-icons/fa'
+import { FaMicrochip, FaMemory, FaServer, FaExclamationTriangle, FaShieldAlt, FaChartBar, FaClock, FaMicrochip as FaCpu, FaDatabase, FaNetworkWired, FaBell, FaTimes, FaSearch } from 'react-icons/fa'
 import io from 'socket.io-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
@@ -33,6 +33,8 @@ const Home = () => {
   const [processToKill, setProcessToKill] = useState(null);
   const [showKillConfirmation, setShowKillConfirmation] = useState(false);
   const [socket, setSocket] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredProcesses, setFilteredProcesses] = useState([]);
 
   const calculateTrend = (current, previous) => {
     if (previous === 0) return null
@@ -102,6 +104,16 @@ const Home = () => {
     newSocket.on('systemMetrics', updateMetrics);
     return () => newSocket.disconnect();
   }, [updateMetrics]);
+
+  // Add search functionality
+  useEffect(() => {
+    const filtered = processes.filter(process => 
+      process.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      process.id.toString().includes(searchQuery) ||
+      process.status.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    setFilteredProcesses(filtered);
+  }, [processes, searchQuery]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -231,6 +243,25 @@ const Home = () => {
       socket.emit('killProcess', processToKill.id);
       setShowKillConfirmation(false);
       setProcessToKill(null);
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status.toLowerCase()) {
+      case 'running':
+        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+      case 'sleeping':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+      case 'stopped':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+      case 'zombie':
+        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+      case 'dead':
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+      case 'unknown':
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
     }
   };
 
@@ -449,13 +480,29 @@ const Home = () => {
 
       {/* Process List */}
       <div className="bg-white dark:bg-[#1E293B] rounded-xl shadow-lg overflow-hidden border border-[#E2E8F0] dark:border-[#1E293B]">
-        <div className="p-6 border-b border-[#E2E8F0] dark:border-[#1E293B] flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-[#0F172A] dark:text-white">Active Processes</h2>
-            <p className="text-[#475569] dark:text-[#CBD5E1] text-sm mt-1">List of currently running system processes</p>
+        <div className="p-6 border-b border-[#E2E8F0] dark:border-[#1E293B]">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-semibold text-[#0F172A] dark:text-white">Active Processes</h2>
+              <p className="text-[#475569] dark:text-[#CBD5E1] text-sm mt-1">List of currently running system processes</p>
+            </div>
+            <div className="px-4 py-2 bg-[#F97316] text-white rounded-lg text-sm font-medium">
+              {processes.length} Processes
+            </div>
           </div>
-          <div className="px-4 py-2 bg-[#F97316] text-white rounded-lg text-sm font-medium">
-            {processes.length} Processes
+          
+          {/* Search Bar */}
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <FaSearch className="text-[#64748B] dark:text-[#CBD5E1]" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search processes by name, PID, or status..."
+              className="w-full pl-10 pr-4 py-2 border border-[#E2E8F0] dark:border-[#1E293B] rounded-lg bg-white dark:bg-[#1E293B] text-[#0F172A] dark:text-white placeholder-[#64748B] dark:placeholder-[#CBD5E1] focus:outline-none focus:ring-2 focus:ring-[#F97316] focus:border-transparent"
+            />
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -473,7 +520,7 @@ const Home = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-[#1E293B] divide-y divide-[#E2E8F0] dark:divide-[#1E293B]">
-                  {processes.map((process) => (
+                  {filteredProcesses.map((process) => (
                     <tr 
                       key={process.id} 
                       className="hover:bg-[#F8FAFC] dark:hover:bg-[#0F172A] transition-colors"
@@ -483,7 +530,7 @@ const Home = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-[#475569] dark:text-[#CBD5E1]">{process.cpu}%</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-[#475569] dark:text-[#CBD5E1]">{process.memory} MB</td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-[#F8FAFC] dark:bg-[#0F172A] text-[#0F172A] dark:text-white">
+                        <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(process.status)}`}>
                           {process.status}
                         </span>
                       </td>
@@ -498,6 +545,13 @@ const Home = () => {
                       </td>
                     </tr>
                   ))}
+                  {filteredProcesses.length === 0 && (
+                    <tr>
+                      <td colSpan="6" className="px-6 py-4 text-center text-[#64748B] dark:text-[#CBD5E1]">
+                        No processes found matching your search.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

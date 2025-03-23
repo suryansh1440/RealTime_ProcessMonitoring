@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { FaChartLine, FaHistory, FaBars, FaTimes, FaServer, FaClock, FaBell, FaUser, FaExclamationCircle, FaTimesCircle } from 'react-icons/fa'
+import { FaChartLine, FaHistory, FaBars, FaTimes, FaServer, FaClock, FaBell, FaUser, FaExclamationCircle, FaTimesCircle, FaSignOutAlt, FaCog, FaUserCircle } from 'react-icons/fa'
 import { motion, AnimatePresence } from 'framer-motion'
 import io from 'socket.io-client'
 import { playNotificationSound, cleanupNotificationSound } from '../utils/notificationSound'
@@ -16,6 +16,11 @@ const Header = () => {
   })
   const [notifications, setNotifications] = useState([])
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  const [userInfo, setUserInfo] = useState({
+    name: 'System User',
+    role: 'Administrator'
+  })
   const MAX_NOTIFICATIONS = 10 // Limit to 10 most recent notifications
   const location = useLocation()
 
@@ -360,17 +365,73 @@ const Header = () => {
             </div>
 
             {/* User Profile */}
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`relative p-2 rounded-full ${
-                isScrolled 
-                  ? 'bg-[#F8FAFC] text-[#64748B] hover:bg-[#F1F5F9]' 
-                  : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
-            >
-              <FaUser className="text-lg" />
-            </motion.button>
+            <div className="relative">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className={`relative p-2 rounded-full ${
+                  isScrolled 
+                    ? 'bg-[#F8FAFC] text-[#64748B] hover:bg-[#F1F5F9]' 
+                    : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+              >
+                <FaUser className="text-lg" />
+              </motion.button>
+
+              {/* User Profile Dropdown */}
+              <AnimatePresence>
+                {showUserMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute right-0 mt-2 w-64 bg-white dark:bg-[#1E293B] rounded-lg shadow-lg border border-[#E2E8F0] dark:border-[#1E293B] z-50"
+                  >
+                    {/* User Info */}
+                    <div className="p-4 border-b border-[#E2E8F0] dark:border-[#1E293B]">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-[#F97316] rounded-full flex items-center justify-center">
+                          <FaUserCircle className="text-white text-xl" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-semibold text-[#0F172A] dark:text-white">
+                            {userInfo.name}
+                          </h3>
+                          <p className="text-xs text-[#64748B] dark:text-[#CBD5E1]">
+                            {userInfo.role}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Menu Items */}
+                    <div className="py-2">
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          // Add profile settings functionality
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-[#64748B] dark:text-[#CBD5E1] hover:bg-[#F8FAFC] dark:hover:bg-[#0F172A] flex items-center space-x-2"
+                      >
+                        <FaCog className="text-[#F97316]" />
+                        <span>Settings</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          // Add logout functionality
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-[#64748B] dark:text-[#CBD5E1] hover:bg-[#F8FAFC] dark:hover:bg-[#0F172A] flex items-center space-x-2"
+                      >
+                        <FaSignOutAlt className="text-[#F97316]" />
+                        <span>Logout</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
           {/* Mobile Menu Button */}
