@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { FaMicrochip, FaMemory, FaServer, FaExclamationTriangle, FaShieldAlt, FaChartBar, FaClock, FaMicrochip as FaCpu, FaDatabase, FaNetworkWired, FaBell } from 'react-icons/fa'
 import io from 'socket.io-client'
 import { motion, AnimatePresence } from 'framer-motion'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 const Home = () => {
   const [systemMetrics, setSystemMetrics] = useState({
@@ -17,6 +18,9 @@ const Home = () => {
     activeProcesses: 0,
     alerts: 0
   })
+
+  const [graphData, setGraphData] = useState([])
+  const maxDataPoints = 120 // Keep last 120 data points (2 minutes at 1-second intervals)
 
   const previousMetrics = useRef({
     cpuUsage: 0,
@@ -67,6 +71,18 @@ const Home = () => {
         activeProcesses: data.activeProcesses,
         alerts: data.alerts || 0
       }
+    })
+
+    // Update graph data
+    setGraphData(prev => {
+      const newData = {
+        timestamp: new Date().toLocaleTimeString(),
+        cpu: data.cpuUsage,
+        memory: data.memoryUsage,
+        processes: data.activeProcesses
+      }
+      const updatedData = [...prev, newData].slice(-maxDataPoints)
+      return updatedData
     })
 
     setProcesses(prev => {
@@ -219,7 +235,7 @@ const Home = () => {
             <FaChartBar className="text-white text-5xl" />
           </motion.div>
         </div>
-        <h1 className="text-5xl font-bold text-[#0F172A] dark:text-white mb-4">
+        <h1 className="text-5xl font-bold text-[#0F172A] dark:text-gray-600 mb-4">
           System Performance Monitor
         </h1>
         <p className="text-[#475569] dark:text-[#CBD5E1] text-xl max-w-2xl mx-auto">
@@ -284,6 +300,134 @@ const Home = () => {
           showProgress={false}
           trend={trends.alerts}
         />
+      </div>
+
+      {/* Real-time Graph */}
+      <div className="bg-white dark:bg-[#1E293B] rounded-xl shadow-lg overflow-hidden border border-[#E2E8F0] dark:border-[#1E293B] mb-12">
+        <div className="p-6 border-b border-[#E2E8F0] dark:border-[#1E293B] flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-[#0F172A] dark:text-white">Performance Trends</h2>
+            <p className="text-[#475569] dark:text-[#CBD5E1] text-sm mt-1">Last 2 minutes of system performance metrics</p>
+          </div>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 rounded-full bg-[#F97316]"></div>
+              <span className="text-sm text-[#475569] dark:text-[#CBD5E1]">CPU</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 rounded-full bg-[#14B8A6]"></div>
+              <span className="text-sm text-[#475569] dark:text-[#CBD5E1]">Memory</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 rounded-full bg-[#1E293B]"></div>
+              <span className="text-sm text-[#475569] dark:text-[#CBD5E1]">Processes</span>
+            </div>
+          </div>
+        </div>
+        <div className="p-6">
+          <div className="h-[400px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={graphData}
+                margin={{
+                  top: 20,
+                  right: 30,
+                  left: 20,
+                  bottom: 20,
+                }}
+              >
+                <defs>
+                  <linearGradient id="cpuGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F97316" stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor="#F97316" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="memoryGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#14B8A6" stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor="#14B8A6" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="processesGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#1E293B" stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor="#1E293B" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid 
+                  strokeDasharray="3 3" 
+                  stroke="#E2E8F0" 
+                  dark:stroke="#1E293B"
+                  vertical={false}
+                />
+                <XAxis 
+                  dataKey="timestamp" 
+                  stroke="#475569" 
+                  dark:stroke="#CBD5E1"
+                  tick={{ fontSize: 12 }}
+                  axisLine={{ stroke: '#E2E8F0' }}
+                  interval="preserveStartEnd"
+                />
+                <YAxis 
+                  stroke="#475569" 
+                  dark:stroke="#CBD5E1"
+                  tick={{ fontSize: 12 }}
+                  axisLine={{ stroke: '#E2E8F0' }}
+                  domain={['auto', 'auto']}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#FFFFFF',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '0.5rem',
+                    color: '#0F172A',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                  }}
+                  labelStyle={{ 
+                    color: '#475569',
+                    fontWeight: 600,
+                    fontSize: '0.875rem'
+                  }}
+                  itemStyle={{
+                    color: '#475569',
+                    fontSize: '0.875rem'
+                  }}
+                  cursor={{ 
+                    stroke: '#E2E8F0',
+                    strokeWidth: 1,
+                    strokeDasharray: '3 3'
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="cpu"
+                  stroke="#F97316"
+                  strokeWidth={2}
+                  dot={false}
+                  name="CPU Usage"
+                  fill="url(#cpuGradient)"
+                  activeDot={{ r: 4, strokeWidth: 2 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="memory"
+                  stroke="#14B8A6"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Memory Usage"
+                  fill="url(#memoryGradient)"
+                  activeDot={{ r: 4, strokeWidth: 2 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="processes"
+                  stroke="#1E293B"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Active Processes"
+                  fill="url(#processesGradient)"
+                  activeDot={{ r: 4, strokeWidth: 2 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </div>
 
       {/* Process List */}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { FaChartLine, FaCog, FaHistory, FaBars, FaTimes } from 'react-icons/fa'
+import { FaChartLine, FaHistory, FaBars, FaTimes } from 'react-icons/fa'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const Header = () => {
@@ -18,8 +18,7 @@ const Header = () => {
 
   const navItems = [
     { path: '/', icon: <FaChartLine />, label: 'Dashboard' },
-    { path: '/history', icon: <FaHistory />, label: 'History' },
-    { path: '/settings', icon: <FaCog />, label: 'Settings' },
+    { path: '/history', icon: <FaHistory />, label: 'History' }
   ]
 
   return (
