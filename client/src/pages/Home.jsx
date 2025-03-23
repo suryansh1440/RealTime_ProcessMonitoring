@@ -20,7 +20,7 @@ const Home = () => {
   })
 
   const [graphData, setGraphData] = useState([])
-  const maxDataPoints = 120 // Keep last 120 data points (2 minutes at 1-second intervals)
+  const maxDataPoints = 1000 // Increased to show more data points
 
   const previousMetrics = useRef({
     cpuUsage: 0,

@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { FaChartLine, FaHistory, FaBars, FaTimes } from 'react-icons/fa'
+import { FaChartLine, FaHistory, FaBars, FaTimes, FaServer, FaClock, FaBell, FaUser, FaExclamationCircle } from 'react-icons/fa'
 import { motion, AnimatePresence } from 'framer-motion'
+import io from 'socket.io-client'
 
 const Header = () => {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isConnected, setIsConnected] = useState(false)
+  const [systemInfo, setSystemInfo] = useState({
+    uptime: '0:00:00',
+    serverStatus: 'offline',
+    notifications: 0
+  })
   const location = useLocation()
 
   useEffect(() => {
@@ -16,10 +23,116 @@ const Header = () => {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  useEffect(() => {
+    let socket = null
+    let reconnectAttempts = 0
+    const maxReconnectAttempts = 5
+    const reconnectDelay = 1000
+
+    const connectSocket = () => {
+      socket = io('http://localhost:3000', {
+        reconnection: true,
+        reconnectionAttempts: maxReconnectAttempts,
+        reconnectionDelay: reconnectDelay,
+        timeout: 5000,
+        transports: ['websocket', 'polling']
+      })
+
+      socket.on('connect', () => {
+        console.log('Socket connected')
+        setIsConnected(true)
+        setSystemInfo(prev => ({
+          ...prev,
+          serverStatus: 'online'
+        }))
+        reconnectAttempts = 0
+      })
+
+      socket.on('disconnect', (reason) => {
+        console.log('Socket disconnected:', reason)
+        setIsConnected(false)
+        setSystemInfo(prev => ({
+          ...prev,
+          serverStatus: 'offline'
+        }))
+      })
+
+      socket.on('connect_error', (error) => {
+        console.error('Connection error:', error)
+        setIsConnected(false)
+        setSystemInfo(prev => ({
+          ...prev,
+          serverStatus: 'offline'
+        }))
+      })
+
+      socket.on('reconnect_attempt', (attemptNumber) => {
+        console.log('Reconnection attempt:', attemptNumber)
+        reconnectAttempts = attemptNumber
+      })
+
+      socket.on('reconnect_failed', () => {
+        console.log('Reconnection failed')
+        setIsConnected(false)
+        setSystemInfo(prev => ({
+          ...prev,
+          serverStatus: 'offline'
+        }))
+      })
+      
+      socket.on('systemInfo', (data) => {
+        if (data) {
+          setSystemInfo(prev => ({
+            ...prev,
+            uptime: data.uptime || '0:00:00',
+            serverStatus: 'online',
+            notifications: data.notifications || 0
+          }))
+        }
+      })
+
+      // Request initial system info
+      socket.emit('requestSystemInfo')
+    }
+
+    connectSocket()
+
+    // Cleanup function
+    return () => {
+      if (socket) {
+        socket.disconnect()
+      }
+    }
+  }, [])
+
   const navItems = [
     { path: '/', icon: <FaChartLine />, label: 'Dashboard' },
     { path: '/history', icon: <FaHistory />, label: 'History' }
   ]
+
+  const ServerStatusIndicator = () => (
+    <div className={`flex items-center space-x-2 ${isScrolled ? 'text-[#64748B]' : 'text-white'}`}>
+      <FaServer className="text-lg" />
+      <div className="flex flex-col">
+        <span className="text-sm font-medium">Server Status</span>
+        <div className="flex items-center space-x-1">
+          <span className={`text-xs ${isConnected ? 'text-green-500' : 'text-red-500'}`}>
+            {isConnected ? 'Online' : 'Offline'}
+          </span>
+          {!isConnected && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-center text-red-500"
+            >
+              <FaExclamationCircle className="text-xs mr-1" />
+              <span className="text-xs">No connection</span>
+            </motion.div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <motion.header
@@ -84,6 +197,52 @@ const Header = () => {
             </nav>
           </div>
 
+          {/* System Info and Actions */}
+          <div className="hidden md:flex items-center space-x-6">
+            {/* Server Status */}
+            <ServerStatusIndicator />
+
+            {/* Uptime */}
+            <div className={`flex items-center space-x-2 ${isScrolled ? 'text-[#64748B]' : 'text-white'}`}>
+              <FaClock className="text-lg" />
+              <div className="flex flex-col">
+                <span className="text-sm font-medium">Uptime</span>
+                <span className="text-xs">{systemInfo.uptime}</span>
+              </div>
+            </div>
+
+            {/* Notifications */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className={`relative p-2 rounded-full ${
+                isScrolled 
+                  ? 'bg-[#F8FAFC] text-[#64748B] hover:bg-[#F1F5F9]' 
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              <FaBell className="text-lg" />
+              {systemInfo.notifications > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {systemInfo.notifications}
+                </span>
+              )}
+            </motion.button>
+
+            {/* User Profile */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className={`relative p-2 rounded-full ${
+                isScrolled 
+                  ? 'bg-[#F8FAFC] text-[#64748B] hover:bg-[#F1F5F9]' 
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              <FaUser className="text-lg" />
+            </motion.button>
+          </div>
+
           {/* Mobile Menu Button */}
           <button
             className={`md:hidden p-2 ${isScrolled ? 'text-[#64748B]' : 'text-white'}`}
@@ -91,17 +250,6 @@ const Header = () => {
           >
             {isMobileMenuOpen ? <FaTimes size={24} /> : <FaBars size={24} />}
           </button>
-
-          {/* Last Updated Time */}
-          <div className={`hidden md:block ${isScrolled ? 'text-[#64748B]' : 'text-white'}`}>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-sm"
-            >
-              Last Updated: {new Date().toLocaleTimeString()}
-            </motion.div>
-          </div>
         </div>
 
         {/* Mobile Navigation */}
@@ -114,6 +262,39 @@ const Header = () => {
               className="md:hidden mt-4"
             >
               <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-4 space-y-4">
+                {/* Mobile System Info */}
+                <div className="grid grid-cols-2 gap-4 p-4 bg-[#F8FAFC] rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <FaServer className="text-[#F97316]" />
+                    <div>
+                      <span className="text-sm font-medium text-[#64748B]">Server</span>
+                      <div className="flex items-center space-x-1">
+                        <span className={`block text-xs ${isConnected ? 'text-green-500' : 'text-red-500'}`}>
+                          {isConnected ? 'Online' : 'Offline'}
+                        </span>
+                        {!isConnected && (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="flex items-center text-red-500"
+                          >
+                            <FaExclamationCircle className="text-xs mr-1" />
+                            <span className="text-xs">No connection</span>
+                          </motion.div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <FaClock className="text-[#F97316]" />
+                    <div>
+                      <span className="text-sm font-medium text-[#64748B]">Uptime</span>
+                      <span className="block text-xs text-[#64748B]">{systemInfo.uptime}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Navigation Links */}
                 {navItems.map((item) => (
                   <Link
                     key={item.path}
@@ -129,6 +310,29 @@ const Header = () => {
                     <span>{item.label}</span>
                   </Link>
                 ))}
+
+                {/* Mobile Actions */}
+                <div className="flex justify-around pt-4 border-t border-[#E2E8F0]">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="relative p-2 text-[#64748B]"
+                  >
+                    <FaBell className="text-lg" />
+                    {systemInfo.notifications > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                        {systemInfo.notifications}
+                      </span>
+                    )}
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="p-2 text-[#64748B]"
+                  >
+                    <FaUser className="text-lg" />
+                  </motion.button>
+                </div>
               </div>
             </motion.nav>
           )}
