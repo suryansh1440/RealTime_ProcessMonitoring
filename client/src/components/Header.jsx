@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { FaChartLine, FaHistory, FaBars, FaTimes, FaServer, FaClock, FaBell, FaUser, FaExclamationCircle } from 'react-icons/fa'
+import { FaChartLine, FaHistory, FaBars, FaTimes, FaServer, FaClock, FaBell, FaUser, FaExclamationCircle, FaTimesCircle } from 'react-icons/fa'
 import { motion, AnimatePresence } from 'framer-motion'
 import io from 'socket.io-client'
+import { playNotificationSound, cleanupNotificationSound } from '../utils/notificationSound'
 
 const Header = () => {
   const [isScrolled, setIsScrolled] = useState(false)
@@ -13,6 +14,9 @@ const Header = () => {
     serverStatus: 'offline',
     notifications: 0
   })
+  const [notifications, setNotifications] = useState([])
+  const [showNotifications, setShowNotifications] = useState(false)
+  const MAX_NOTIFICATIONS = 10 // Limit to 10 most recent notifications
   const location = useLocation()
 
   useEffect(() => {
@@ -86,9 +90,25 @@ const Header = () => {
             ...prev,
             uptime: data.uptime || '0:00:00',
             serverStatus: 'online',
-            notifications: data.notifications || 0
+            notifications: Math.min(data.notifications || 0, MAX_NOTIFICATIONS)
           }))
+          if (data.recentNotifications) {
+            setNotifications(data.recentNotifications.slice(0, MAX_NOTIFICATIONS))
+          }
         }
+      })
+
+      socket.on('newNotification', (notification) => {
+        setNotifications(prev => {
+          const newNotifications = [notification, ...prev].slice(0, MAX_NOTIFICATIONS)
+          setSystemInfo(prev => ({
+            ...prev,
+            notifications: newNotifications.length
+          }))
+          return newNotifications
+        })
+        // Play notification sound
+        playNotificationSound()
       })
 
       // Request initial system info
@@ -102,8 +122,32 @@ const Header = () => {
       if (socket) {
         socket.disconnect()
       }
+      cleanupNotificationSound()
     }
   }, [])
+
+  const handleAcknowledgeNotification = (notificationId) => {
+    setNotifications(prev => {
+      const newNotifications = prev.filter(n => n.id !== notificationId)
+      setSystemInfo(prev => ({
+        ...prev,
+        notifications: newNotifications.length
+      }))
+      return newNotifications
+    })
+    socket.emit('acknowledgeNotification', notificationId)
+  }
+
+  const clearAllNotifications = () => {
+    setNotifications([])
+    setSystemInfo(prev => ({
+      ...prev,
+      notifications: 0
+    }))
+    notifications.forEach(notification => {
+      socket.emit('acknowledgeNotification', notification.id)
+    })
+  }
 
   const navItems = [
     { path: '/', icon: <FaChartLine />, label: 'Dashboard' },
@@ -212,22 +256,108 @@ const Header = () => {
             </div>
 
             {/* Notifications */}
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`relative p-2 rounded-full ${
-                isScrolled 
-                  ? 'bg-[#F8FAFC] text-[#64748B] hover:bg-[#F1F5F9]' 
-                  : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
-            >
-              <FaBell className="text-lg" />
-              {systemInfo.notifications > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                  {systemInfo.notifications}
-                </span>
-              )}
-            </motion.button>
+            <div className="relative">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowNotifications(!showNotifications)}
+                className={`relative p-2 rounded-full ${
+                  isScrolled 
+                    ? 'bg-[#F8FAFC] text-[#64748B] hover:bg-[#F1F5F9]' 
+                    : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+              >
+                <FaBell className="text-lg" />
+                {systemInfo.notifications > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {systemInfo.notifications}
+                  </span>
+                )}
+              </motion.button>
+
+              {/* Notifications Dropdown */}
+              <AnimatePresence>
+                {showNotifications && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute right-0 mt-2 w-80 bg-white dark:bg-[#1E293B] rounded-lg shadow-lg border border-[#E2E8F0] dark:border-[#1E293B] z-50"
+                  >
+                    <div className="p-4 border-b border-[#E2E8F0] dark:border-[#1E293B] flex justify-between items-center">
+                      <div className="flex items-center space-x-2">
+                        <h3 className="text-lg font-semibold text-[#0F172A] dark:text-white">Notifications</h3>
+                        {notifications.length > 0 && (
+                          <span className="px-2 py-1 bg-[#F97316] text-white text-xs rounded-full">
+                            {notifications.length}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {notifications.length > 0 && (
+                          <button
+                            onClick={clearAllNotifications}
+                            className="text-[#64748B] hover:text-[#F97316] text-sm"
+                          >
+                            Clear All
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setShowNotifications(false)}
+                          className="text-[#64748B] hover:text-[#F97316]"
+                        >
+                          <FaTimes />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto">
+                      {notifications.length > 0 ? (
+                        notifications.map(notification => (
+                          <div
+                            key={notification.id}
+                            className="p-4 border-b border-[#E2E8F0] dark:border-[#1E293B] hover:bg-[#F8FAFC] dark:hover:bg-[#0F172A]"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-start space-x-2">
+                                  <div className={`mt-1 w-2 h-2 rounded-full ${
+                                    notification.type === 'warning' ? 'bg-yellow-500' :
+                                    notification.type === 'error' ? 'bg-red-500' :
+                                    'bg-[#F97316]'
+                                  }`} />
+                                  <div>
+                                    <p className={`text-sm font-medium ${
+                                      notification.type === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
+                                      notification.type === 'error' ? 'text-red-600 dark:text-red-400' :
+                                      'text-[#0F172A] dark:text-white'
+                                    }`}>
+                                      {notification.message}
+                                    </p>
+                                    <p className="text-xs text-[#64748B] mt-1">
+                                      {new Date(notification.timestamp).toLocaleString()}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => handleAcknowledgeNotification(notification.id)}
+                                className="ml-2 text-[#64748B] hover:text-[#F97316]"
+                              >
+                                <FaTimesCircle />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-4 text-center text-[#64748B]">
+                          No notifications
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             {/* User Profile */}
             <motion.button

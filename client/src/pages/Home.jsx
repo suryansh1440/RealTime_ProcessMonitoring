@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { FaMicrochip, FaMemory, FaServer, FaExclamationTriangle, FaShieldAlt, FaChartBar, FaClock, FaMicrochip as FaCpu, FaDatabase, FaNetworkWired, FaBell } from 'react-icons/fa'
+import { FaMicrochip, FaMemory, FaServer, FaExclamationTriangle, FaShieldAlt, FaChartBar, FaClock, FaMicrochip as FaCpu, FaDatabase, FaNetworkWired, FaBell, FaTimes } from 'react-icons/fa'
 import io from 'socket.io-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
@@ -30,6 +30,9 @@ const Home = () => {
   })
 
   const [processes, setProcesses] = useState([])
+  const [processToKill, setProcessToKill] = useState(null);
+  const [showKillConfirmation, setShowKillConfirmation] = useState(false);
+  const [socket, setSocket] = useState(null);
 
   const calculateTrend = (current, previous) => {
     if (previous === 0) return null
@@ -94,10 +97,11 @@ const Home = () => {
   }, [])
 
   useEffect(() => {
-    const socket = io('http://localhost:3000')
-    socket.on('systemMetrics', updateMetrics)
-    return () => socket.disconnect()
-  }, [updateMetrics])
+    const newSocket = io('http://localhost:3000');
+    setSocket(newSocket);
+    newSocket.on('systemMetrics', updateMetrics);
+    return () => newSocket.disconnect();
+  }, [updateMetrics]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -216,6 +220,19 @@ const Home = () => {
       color: "bg-[#1E293B]"
     }
   ]
+
+  const handleKillProcess = (process) => {
+    setProcessToKill(process);
+    setShowKillConfirmation(true);
+  };
+
+  const confirmKillProcess = () => {
+    if (processToKill && socket) {
+      socket.emit('killProcess', processToKill.id);
+      setShowKillConfirmation(false);
+      setProcessToKill(null);
+    }
+  };
 
   return (
     <div className="container mx-auto px-4 py-8 pt-24 max-w-7xl">
@@ -447,11 +464,12 @@ const Home = () => {
               <table className="min-w-full divide-y divide-[#E2E8F0] dark:divide-[#1E293B]">
                 <thead className="bg-[#F8FAFC] dark:bg-[#0F172A]">
                   <tr>
-                    <th scope="col" className="px-6 py-4 text-left text-xs font-medium text-[#475569] dark:text-[#CBD5E1] uppercase tracking-wider w-1/3">Process Name</th>
+                    <th scope="col" className="px-6 py-4 text-left text-xs font-medium text-[#475569] dark:text-[#CBD5E1] uppercase tracking-wider w-1/4">Process Name</th>
                     <th scope="col" className="px-6 py-4 text-left text-xs font-medium text-[#475569] dark:text-[#CBD5E1] uppercase tracking-wider w-1/6">PID</th>
                     <th scope="col" className="px-6 py-4 text-left text-xs font-medium text-[#475569] dark:text-[#CBD5E1] uppercase tracking-wider w-1/6">CPU %</th>
                     <th scope="col" className="px-6 py-4 text-left text-xs font-medium text-[#475569] dark:text-[#CBD5E1] uppercase tracking-wider w-1/6">Memory (MB)</th>
                     <th scope="col" className="px-6 py-4 text-left text-xs font-medium text-[#475569] dark:text-[#CBD5E1] uppercase tracking-wider w-1/6">Status</th>
+                    <th scope="col" className="px-6 py-4 text-left text-xs font-medium text-[#475569] dark:text-[#CBD5E1] uppercase tracking-wider w-1/6">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-[#1E293B] divide-y divide-[#E2E8F0] dark:divide-[#1E293B]">
@@ -469,6 +487,15 @@ const Home = () => {
                           {process.status}
                         </span>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <button
+                          onClick={() => handleKillProcess(process)}
+                          className="text-red-500 hover:text-red-700 transition-colors"
+                          title="Kill Process"
+                        >
+                          <FaTimes />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -477,6 +504,50 @@ const Home = () => {
           </div>
         </div>
       </div>
+
+      {/* Kill Process Confirmation Modal */}
+      <AnimatePresence>
+        {showKillConfirmation && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-[#1E293B] rounded-lg p-6 max-w-md w-full mx-4"
+            >
+              <h3 className="text-lg font-semibold text-[#0F172A] dark:text-white mb-4">
+                Kill Process
+              </h3>
+              <p className="text-[#475569] dark:text-[#CBD5E1] mb-4">
+                Are you sure you want to kill the process "{processToKill?.name}" (PID: {processToKill?.id})?
+                This action cannot be undone.
+              </p>
+              <div className="flex justify-end space-x-4">
+                <button
+                  onClick={() => {
+                    setShowKillConfirmation(false);
+                    setProcessToKill(null);
+                  }}
+                  className="px-4 py-2 text-[#64748B] hover:text-[#475569] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmKillProcess}
+                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                >
+                  Kill Process
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
